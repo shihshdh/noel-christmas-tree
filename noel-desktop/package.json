@@ -1,0 +1,13 @@
+{
+  "name": "noel-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "icons": "tauri icon app-icon.png",
+    "dev": "node prepare-dist.cjs && tauri dev",
+    "build": "node prepare-dist.cjs && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

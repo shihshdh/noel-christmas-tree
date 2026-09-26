@@ -1,0 +1,19 @@
+# 这个文件夹里还有别的项目，仓库只收圣诞树相关的部分（白名单）
+/*
+!/.gitignore
+!/README.md
+!/LICENSE
+!/docs/
+!/html/
+!/noel-desktop/
+
+# 网页：备份和无关文件不进仓库
+/html/_backup*/
+/html/我的网页开发.html
+
+# 客户端：依赖、构建产物、打包临时文件
+/noel-desktop/node_modules/
+/noel-desktop/dist/
+/noel-desktop/build.log
+/noel-desktop/src-tauri/target/
+/noel-desktop/src-tauri/gen/

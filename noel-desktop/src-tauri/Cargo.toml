@@ -1,0 +1,26 @@
+[package]
+name = "noel-tree"
+version = "1.0.0"
+description = "Noël · 圣诞树 Windows 客户端"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-window-state = "2"
+url = "2"
+
+[target.'cfg(windows)'.dependencies]
+# 与 tauri 内置 wry 用的版本一致，才能拿到同一个 WebView2 接口
+webview2-com = "0.38"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

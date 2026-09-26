@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-recording"
+description = "Enables the save_recording command without any pre-configured scope."
+commands.allow = ["save_recording"]
+
+[[permission]]
+identifier = "deny-save-recording"
+description = "Denies the save_recording command without any pre-configured scope."
+commands.deny = ["save_recording"]

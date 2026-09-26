@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "打包在客户端里的圣诞树页面：只能切换窗口全屏、把录像写进录像文件夹、打开该文件夹。",
+  "windows": ["main"],
+  "permissions": ["core:default", "allow-toggle-fullscreen", "allow-is-fullscreen", "allow-save-recording", "allow-open-recordings-folder"]
+}
