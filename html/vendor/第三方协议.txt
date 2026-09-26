@@ -1,0 +1,1 @@
+html/vendor 里的第三方文件保留各自的协议：three.js（MIT）、MediaPipe Tasks Vision 与手势模型（Apache-2.0）、ambientCG 立面贴图（CC0）。
