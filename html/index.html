@@ -404,7 +404,7 @@ html[data-intro] #intro{display:block}
   </div>
   <div class="sec legend" id="legend">
     <div class="legend-row" data-g="OPEN"><span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 11V6M10 10V4M13 10V4.5M16 11V6.5"/><path d="M5 12.5c0 4 2.7 7.5 7 7.5s6.5-3 6.5-7V10"/></svg></span><b>张开手掌</b><span>聚合 · 左右移动转树</span></div>
-    <div class="legend-row" data-g="FIST"><span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="6" y="7" width="12" height="11" rx="4"/><path d="M6 11h12M10 7v4M14 7v4"/></svg></span><b>握拳</b><span>散作星河</span></div>
+    <div class="legend-row" data-g="FIST"><span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="6" y="7" width="12" height="11" rx="4"/><path d="M6 11h12M10 7v4M14 7v4"/></svg></span><b>握拳</b><span>散作星河 · 再握换形状</span></div>
     <div class="legend-row" data-g="PINCH"><span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 16a5 5 0 0 1 0-8M16 8a5 5 0 0 1 0 8"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg></span><b>捏合</b><span>取出一张照片</span></div>
   </div>
   <div class="sec">
@@ -437,7 +437,7 @@ html[data-intro] #intro{display:block}
       </button>
     </div>
   </div>
-  <div class="keys"><kbd>Space</kbd>聚合 <kbd>Z</kbd>散开 <kbd>X</kbd>照片 <kbd>P</kbd>照片墙 <kbd>B</kbd>背景 <kbd>R</kbd>录像 <kbd>H</kbd>隐藏 <kbd>F</kbd>全屏<br>拖动画面可旋转圣诞树 · 照片可直接拖进窗口</div>
+  <div class="keys"><kbd>Space</kbd>聚合 <kbd>Z</kbd>散开（再按换形状） <kbd>X</kbd>照片 <kbd>P</kbd>照片墙 <kbd>B</kbd>背景 <kbd>R</kbd>录像 <kbd>H</kbd>隐藏 <kbd>F</kbd>全屏<br>拖动画面可旋转圣诞树 · 照片可直接拖进窗口</div>
 </aside>
 
 <section class="gallery glass" id="gallery" aria-label="照片墙" aria-hidden="true">
@@ -812,13 +812,72 @@ const U = {
   uTime: { value: 0 }, uMorph: { value: 1 }, uPointScale: { value: 800 },
   uAudio: { value: 0 }, uPR: { value: 1 }, uRoad: { value: 1 },
   uSnowDepth: { value: 0 }, uSnowCover: { value: 0 }, uSnowCap: { value: 0 },
-  uStarPos: { value: new THREE.Vector3(0, 14, 0) }, uMoonLightDir: { value: new THREE.Vector3(0, 1, 0) }
+  uStarPos: { value: new THREE.Vector3(0, 14, 0) }, uMoonLightDir: { value: new THREE.Vector3(0, 1, 0) },
+  uShapeA: { value: 0 }, uShapeB: { value: 0 }, uShapeMix: { value: 1 }
 };
+const SHAPE_U = () => ({ uShapeA: U.uShapeA, uShapeB: U.uShapeB, uShapeMix: U.uShapeMix });
+// 散开的形状：0 星河盘（原来的）、1 旋臂星系、2 心形、3 五角星、4 雪花、5 双螺旋、6 球壳。
+// 每个粒子的散开位置 aScatter 本身就是一个随机点，拿它做哈希当作这粒子在新形状里的"参数"，不用多存属性；
+// uShapeA → uShapeB 按 uShapeMix 过渡（散开状态下换形状时整团粒子流过去）。
+const SHAPES = ['星河', '旋臂星系', '心形', '五角星', '雪花', '双螺旋', '星球'];
 const MORPH_GLSL = /* glsl */`
-uniform float uTime; uniform float uMorph;
+uniform float uTime; uniform float uMorph; uniform float uShapeA; uniform float uShapeB; uniform float uShapeMix;
 float morphP(float d){ float p = clamp(uMorph * 1.6 - d * 0.6, 0.0, 1.0); return p*p*p*(p*(p*6.0-15.0)+10.0); }
-vec3 morphPos(vec3 a, vec3 b, float p, vec4 s){
-  float ang = uTime * (0.03 + 0.03 * fract(s.x * 3.7));
+float shH(vec3 p, vec3 k, float m){ return fract(sin(dot(p, k)) * m); }
+vec3 shapeAt(float k, vec3 b){
+  if (k < 0.5) return b;
+  float u = shH(b, vec3(12.9898, 78.233, 37.719), 43758.5453);
+  float v = shH(b, vec3(39.346, 11.135, 83.155), 24634.6345);
+  float w = shH(b, vec3(73.156, 52.235, 9.151), 35742.1234);
+  float z = shH(b.zxy, vec3(26.651, 91.733, 47.193), 51231.917) - 0.5;
+  if (k < 1.5) {            // 旋臂星系：三条旋臂，越往外越薄、越散
+    float arm = floor(u * 3.0), r = 5.0 + 41.0 * pow(v, 0.75);
+    float a = arm * 2.0944 + r * 0.15 + (w - 0.5) * (0.35 + r * 0.012);
+    return vec3(cos(a) * r, z * 3.2 * (1.0 - r / 52.0) + 3.0, sin(a) * r);
+  }
+  if (k < 2.5) {            // 心形：轮廓密、里面稀
+    float t = u * 6.2831853, sx = sin(t);
+    vec2 h = vec2(16.0 * sx * sx * sx, 13.0 * cos(t) - 5.0 * cos(2.0 * t) - 2.0 * cos(3.0 * t) - cos(4.0 * t));
+    float f = w < 0.3 ? sqrt(v) : mix(0.9, 1.04, v);
+    return vec3(h.x * 1.5 * f, h.y * 1.5 * f + 5.0, z * 4.0);
+  }
+  if (k < 3.5) {            // 五角星：沿十条边铺，三成填进里面
+    float a = u * 10.0, i = floor(a), fr = fract(a);
+    float r0 = mod(i, 2.0) < 0.5 ? 27.0 : 11.0, r1 = mod(i, 2.0) < 0.5 ? 11.0 : 27.0;
+    vec2 p0 = vec2(sin(i * 0.6283185), cos(i * 0.6283185)) * r0, p1 = vec2(sin((i + 1.0) * 0.6283185), cos((i + 1.0) * 0.6283185)) * r1;
+    vec2 e = mix(p0, p1, fr) * (w < 0.3 ? sqrt(v) : mix(0.94, 1.03, v));
+    return vec3(e.x, e.y + 5.0, z * 3.0);
+  }
+  if (k < 4.5) {            // 雪花：六条主枝，每条三对分叉
+    float arm = floor(u * 6.0) * 1.0471976, L = 30.0;
+    vec2 d = vec2(sin(arm), cos(arm)), q;
+    if (w < 0.55) q = d * v * L;
+    else {
+      float bi = floor(fract(w * 7.31) * 3.0), side = z < 0.0 ? -1.0 : 1.0, ba = arm + side * 1.0471976;
+      q = d * (0.34 + bi * 0.21) * L + vec2(sin(ba), cos(ba)) * v * (0.36 - bi * 0.09) * L;
+    }
+    return vec3(q.x, q.y + 5.0, z * 2.0);
+  }
+  if (k < 5.5) {            // 双螺旋：两条链 + 链间的横档
+    float t = u, a = t * 6.2831853 * 3.2, r = 15.0;
+    if (w < 0.82) { a += v < 0.5 ? 0.0 : 3.1415927; return vec3(cos(a) * r + z * 1.6, -16.0 + t * 44.0, sin(a) * r + z * 1.6); }
+    float f = v * 2.0 - 1.0;
+    return vec3(cos(a) * r * f, -16.0 + t * 44.0 + z, sin(a) * r * f);
+  }
+  {                         // 星球：一层球壳 + 一圈土星环
+    if (w < 0.72) { float yy = u * 2.0 - 1.0, s2 = sqrt(1.0 - yy * yy), a = v * 6.2831853; return vec3(cos(a) * s2, yy, sin(a) * s2) * 19.0 * (0.97 + z * 0.08) + vec3(0.0, 5.0, 0.0); }
+    float a = u * 6.2831853, r = mix(26.0, 40.0, v);
+    vec3 ring = vec3(cos(a) * r, z * 0.8, sin(a) * r);
+    return vec3(ring.x, ring.y * 0.94 - ring.z * 0.34, ring.y * 0.34 + ring.z * 0.94) + vec3(0.0, 5.0, 0.0);
+  }
+}
+vec3 morphPos(vec3 a, vec3 b0, float p, vec4 s){
+  float mixE = uShapeMix * uShapeMix * (3.0 - 2.0 * uShapeMix);
+  vec3 b = mix(shapeAt(uShapeA, b0), shapeAt(uShapeB, b0), mixE);
+  b.y += sin(mixE * 3.14159265) * (fract(s.x * 5.3) - 0.5) * 9.0;   // 换形状时整团粒子扬起再落下
+  // 有形状的时候所有粒子同速转，形状才不会被转散；星河盘还是各转各的
+  float shaped = mix(step(0.5, uShapeA), step(0.5, uShapeB), mixE);
+  float ang = uTime * mix(0.03 + 0.03 * fract(s.x * 3.7), 0.045, shaped);
   float c = cos(ang), sn = sin(ang);
   vec3 bb = vec3(c*b.x - sn*b.z, b.y + sin(uTime*0.4 + s.x) * 0.8, sn*b.x + c*b.z);
   vec3 pos = mix(a, bb, p);
@@ -843,7 +902,7 @@ let snowAmt = qs.has('snow') ? 1 : 0.35, sweeping = false, snowMetaTimer = 0;
 let fsrUser = qs.has('fsr') || (() => { try { return localStorage.getItem('noel-fsr') === '1'; } catch (e) { return false; } })();
 const noReflect = [];
 const photos = [];
-let mode = 'SCATTER', morph = 1, heldPhoto = null, lastHeld = -1;
+let mode = 'SCATTER', morph = 1, heldPhoto = null, lastHeld = -1, shape = 0;
 let time = 0, yaw = 0, yawVel = 0, handYaw = 0, handYawTarget = 0;
 let revealed = false, revealAt = 0;
 const pointer = { x: 0, y: 0, sx: 0, sy: 0 };
@@ -878,43 +937,49 @@ async function build() {
   scene.fog = new THREE.FogExp2(new THREE.Color().setRGB(0.05, 0.036, 0.052), 0.0034);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
+  await prewarmPMREM(pmrem, 256);
   scene.environment = makeEnvironment(pmrem);
 
   mainGroup = new THREE.Group(); scene.add(mainGroup);
   pedestal = new THREE.Group(); scene.add(pedestal);
 
   const big = GPU.discrete, small = isSmall();
+  // 每建完一块让出主线程：开屏动画（字标、星芒）还在播，单次占用主线程不超过几十毫秒
+  const breathe = () => new Promise(r => setTimeout(r, 0));
   buildSky();
   buildStars();
   buildBokeh();
-  buildLights();
-  cityGroup = buildCity();
-  forestGroup = buildForestScene();
-  buildFoliage(big ? 26000 : small ? 9000 : 14000);
-  buildOrnaments();
+  buildLights(); await breathe();
+  cityGroup = buildCity(); await breathe();
+  forestGroup = buildForestScene(); await breathe();
+  buildFoliage(big ? 26000 : small ? 9000 : 14000); await breathe();
+  buildOrnaments(); await breathe();
   buildTreeLights(big ? 1400 : small ? 650 : 900);
   buildGarland(big ? 2200 : 1500);
   buildGlints(big ? 420 : 260);
-  buildDust(big ? 1100 : 700);
+  buildDust(big ? 1100 : 700); await breathe();
   buildStar();
   buildTrunk();
-  buildPresents();
-  buildPhotoFrames(8);
+  buildPresents(); await breathe();
+  buildPhotoFrames(8); await breathe();
   buildFloor();
   buildSnowGround();
-  buildSnow(big ? 7000 : small ? 1800 : 2800);
+  buildSnow(big ? 7000 : small ? 1800 : 2800); await breathe();
   buildPost();
-  setupLiveReflections();
+  setupLiveReflections(); await breathe();
   applyTheme(theme, false);
 
   applyQuality();
   addEventListener('resize', debounce(onResize, 120));
   setupInput();
 
-  if (renderer.compileAsync) { try { await renderer.compileAsync(scene, camera); } catch (e) {} }
+  if (atlasReady) await atlasReady;
+  await warmUp();
+  warmed = true; updateLiveReflections(true);
   requestAnimationFrame(loop);
   requestAnimationFrame(() => requestAnimationFrame(() => host.classList.add('ready')));
   window.__stats.ready = true; window.__engineReady = true;
+  if (qs.has('perf')) window.__noel = { THREE, renderer, scene, camera, composer, cubeCam, envGen };
   setHint(ASSETS.local ? '手势未开启 · 可用左侧按钮或键盘操作' : '建议双击「启动圣诞树.bat」打开：手势更稳、加载更快', '');
   syncFsrUI();
   loadLibrary();
@@ -1124,6 +1189,7 @@ function buildForestScene() {
   });
   const pts = new THREE.Points(g, pm); pts.frustumCulled = false;
   group.add(pts);
+  mergeStatic(group);
   return group;
 }
 
@@ -1250,7 +1316,7 @@ function withSnowCap(mat, k, lo, hi, key) {
 function morphDepthMaterial() {
   const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   m.onBeforeCompile = sh => {
-    sh.uniforms.uTime = U.uTime; sh.uniforms.uMorph = U.uMorph;
+    sh.uniforms.uTime = U.uTime; sh.uniforms.uMorph = U.uMorph; Object.assign(sh.uniforms, SHAPE_U());
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>\n${MORPH_GLSL}\nattribute vec3 aTree; attribute vec3 aScatter; attribute vec4 aSeed;`)
       .replace('#include <begin_vertex>', `
@@ -1265,7 +1331,7 @@ function morphDepthMaterial() {
 // ---------------- 纽约时代广场：楼群、LED 大屏、滚动字幕带、一号时报广场塔与水晶球、车流、路灯 ----------------
 // 大屏内容全部是自绘的节日主题画面，不使用任何真实品牌。
 const CITY = { roadIn: 22, roadOut: 42, bldg: 46 };
-let cityGlow, cars = [], carLightPts, ball, cubeCam, cubeRT, envGen, envRT, envExtras, cubeTick = 0;
+let cityGlow, cars = [], carLightPts, ball, cubeCam, cubeRT, envGen, envRT, envExtras, cubeTick = 0, warmed = false, atlasReady = null;
 
 // 楼体：金属玻璃幕墙 + 按世界坐标生成的窗格灯光（实例化的远景楼群也能用）
 function facadeMaterial(tint, key) {
@@ -1332,7 +1398,8 @@ function adAtlas() {
     { bg: ['#050505', '#1f1f1f'], lines: [['2027', `900 210px ${sans}`, '#ff3b5c']] },
     { bg: ['#0a0022', '#ff2bd6'], lines: [['NEON', `900 120px ${sans}`, '#00f0ff'], ['DREAMS', `900 70px ${sans}`, '#fff']] }
   ];
-  ads.forEach((ad, i) => {
+  // 16 幅海报带阴影的大字要画一百多毫秒：一幅一让，主线程不被整块占住（开屏动画、字体加载后的重绘都不会顿一下）
+  const paint = (ad, i) => {
     const ox = (i % 4) * S, oy = Math.floor(i / 4) * S;
     x.save(); x.translate(ox, oy); x.beginPath(); x.rect(0, 0, S, S); x.clip();
     if (ad.blocks) {
@@ -1357,8 +1424,15 @@ function adAtlas() {
       y += heights[k] + gap;
     });
     x.restore();
-  });
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.generateMipmaps = true; return t;
+  };
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.generateMipmaps = true;
+  t.userData.ready = (async () => {
+    for (let i = 0; i < ads.length; i++) { paint(ads[i], i); await new Promise(r => setTimeout(r, 0)); }
+    // 画好的画布先转成 ImageBitmap 再传显卡：直接传 2D 画布要在主线程上把整张 2048² 读回来，一百多毫秒
+    try { const bmp = await createImageBitmap(c, { imageOrientation: 'flipY' }); t.image = bmp; t.flipY = false; } catch (e) {}
+    t.needsUpdate = true;
+  })();
+  return t;
 }
 function tickerTexture() {
   const c = document.createElement('canvas'); c.width = 4096; c.height = 128;
@@ -1372,10 +1446,20 @@ function tickerTexture() {
 const FACADE_TEX = [['Facade009', 56], ['Facade011', 130], ['Facade014', 104], ['Facade017', 40]];
 function loadFacadeMaterials() {
   if (!ASSETS.local) return null;   // 直接双击 html 打开时浏览器不让读本地贴图，用程序生成的立面
-  const L = new THREE.TextureLoader(), aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  // 16 张 2048² 的 JPG：用 ImageBitmap 在后台线程解码。普通 <img> 要等上传显卡时才在主线程上解码，每张卡 60–90ms
+  const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const useBitmap = typeof createImageBitmap === 'function';
+  const L = useBitmap ? null : new THREE.TextureLoader();
   return FACADE_TEX.map(([id, tile]) => {
     const t = (name, srgb) => {
-      const tx = L.load(`./vendor/textures/${id}/${name}.jpg`);
+      const url = `./vendor/textures/${id}/${name}.jpg`;
+      let tx;
+      if (useBitmap) {
+        tx = new THREE.Texture(); tx.flipY = false;   // 翻转在解码时做（ImageBitmap 不吃 UNPACK_FLIP_Y）
+        fetch(url).then(r => r.blob())
+          .then(b => createImageBitmap(b, { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: srgb ? 'default' : 'none' }))
+          .then(bmp => { tx.image = bmp; tx.needsUpdate = true; }).catch(() => {});
+      } else tx = L.load(url);
       tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.anisotropy = aniso;
       if (srgb) tx.colorSpace = THREE.SRGBColorSpace;
       return tx;
@@ -1499,6 +1583,7 @@ function buildCity() {
   }
   buildScreens(city, screens);
   buildCityGlows(city, glows);
+  mergeStatic(city, new Set([ball]));
   buildCars(city);
   noReflect.push(city.children.find(o => o.isInstancedMesh && o.count > 100) || city);
   return city;
@@ -1566,7 +1651,9 @@ function buildScreens(city, list) {
   m.uniforms.uTime = U.uTime;
   m.uniforms.uAtlas.value = adAtlas();
   m.uniforms.uTicker.value = tickerTexture();
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { const old = m.uniforms.uAtlas.value; m.uniforms.uAtlas.value = adAtlas(); old.dispose(); });
+  atlasReady = m.uniforms.uAtlas.value.userData.ready;
+  // 网页字体到了再画一遍（画完才换上，换之前一直用旧的）
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => atlasReady).then(() => { const next = adAtlas(); next.userData.ready.then(() => { const old = m.uniforms.uAtlas.value; m.uniforms.uAtlas.value = next; old.dispose(); }); });
   const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false;
   city.add(mesh);
 }
@@ -1604,6 +1691,46 @@ function mergeGeos(list) {
   m.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   m.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   return m;
+}
+// 把 root 下面不会再动的普通网格按"材质 + 阴影设置"合并成一个网格：画面完全一样，绘制调用从上百次降到个位数。
+// （主画面、地面倒影、实时环境反射、阴影各画一遍场景，每省一次调用就省四次。）
+function mergeStatic(root, skip = new Set()) {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), m4 = new THREE.Matrix4();
+  const buckets = new Map();
+  root.traverse(o => {
+    if (!o.isMesh || o.isInstancedMesh || skip.has(o) || Array.isArray(o.material) || o.material.isShaderMaterial || !o.visible) return;
+    const key = `${o.material.uuid}|${o.castShadow}|${o.receiveShadow}|${o.layers.mask}|${o.renderOrder}`;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(o);
+  });
+  for (const list of buckets.values()) {
+    if (list.length < 2) continue;
+    const geos = list.map(o => {
+      const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone());
+      g.applyMatrix4(m4.multiplyMatrices(inv, o.matrixWorld));
+      return g;
+    });
+    const names = ['position', 'normal', 'uv'].filter(n => geos.every(g => g.attributes[n]));
+    const total = geos.reduce((n, g) => n + g.attributes.position.count, 0);
+    const merged = new THREE.BufferGeometry();
+    for (const n of names) {
+      const size = geos[0].attributes[n].itemSize, arr = new Float32Array(total * size);
+      let off = 0;
+      for (const g of geos) { arr.set(g.attributes[n].array, off); off += g.attributes[n].array.length; }
+      merged.setAttribute(n, new THREE.BufferAttribute(arr, size));
+    }
+    merged.computeBoundingSphere(); merged.computeBoundingBox();
+    const src = list[0], mesh = new THREE.Mesh(merged, src.material);
+    mesh.castShadow = src.castShadow; mesh.receiveShadow = src.receiveShadow; mesh.layers.mask = src.layers.mask; mesh.renderOrder = src.renderOrder;
+    mesh.matrixAutoUpdate = false;
+    root.add(mesh);
+    for (const o of list) { o.parent.remove(o); o.geometry.dispose(); }
+    geos.forEach(g => g.dispose());
+  }
+  // 合并后留下的空分组也去掉
+  const empty = []; root.traverse(o => { if (o !== root && o.isGroup && !o.children.length) empty.push(o); });
+  empty.forEach(o => o.parent && o.parent.remove(o));
 }
 // 侧面轮廓（x = 车长方向，y = 高度）挤出成车宽，车头朝 +z
 function extrudeSide(points, width, bevel) {
@@ -1703,17 +1830,33 @@ function setupLiveReflections() {
   });
   scene.add(envExtras);
   envGen = new THREE.PMREMGenerator(renderer);
-  updateLiveReflections(true);
 }
+// 实时环境反射：以前每 4 帧一次性画完立方体的 6 个面再做 PMREM，那一帧比别的帧重好几倍，画面就一顿一顿的。
+// 现在拆开摊到每一帧：前 3 帧每帧画 2 个面，第 4 帧做 PMREM——刷新频率不变，每帧的负担一样平。
 function updateLiveReflections(force) {
-  if (!cubeCam || (!force && ++cubeTick % 4)) return;
+  if (!cubeCam || !warmed) return;   // 预热之前画立方体会让所有材质在主线程上同步编译
+  const step = force ? -1 : cubeTick++ % 4;
   const hide = [mainGroup, pedestal, snowGround, ...noReflect];
   const was = hide.map(o => o.visible);
   hide.forEach(o => { o.visible = false; });
-  cubeCam.update(renderer, scene);
+  if (step < 0) cubeCam.update(renderer, scene);
+  else if (step < 3) renderCubeFaces(step * 2, step * 2 + 2);
   hide.forEach((o, i) => { o.visible = was[i]; });
-  envRT = envGen.fromCubemap(cubeRT.texture, envRT || null);
-  scene.environment = envRT.texture;
+  if (step < 0 || step === 3) {
+    envRT = envGen.fromCubemap(cubeRT.texture, envRT || null);
+    scene.environment = envRT.texture;
+  }
+}
+function renderCubeFaces(from, to) {
+  const prev = renderer.getRenderTarget(), tex = cubeRT.texture, gen = tex.generateMipmaps;
+  cubeCam.updateMatrixWorld();
+  for (let f = from; f < to; f++) {
+    tex.generateMipmaps = f === 5 ? gen : false;   // 最后一个面画完时才生成 mipmap
+    renderer.setRenderTarget(cubeRT, f);
+    renderer.render(scene, cubeCam.children[f]);
+  }
+  tex.generateMipmaps = gen;
+  renderer.setRenderTarget(prev);
 }
 
 // ---------------- 积雪地面：越积越厚；雪粒按反射定律朝光源闪光；没盖住的地方露出冰面倒影 ----------------
@@ -1836,7 +1979,7 @@ function buildFoliage(n) {
     col.set([c.r, c.g, c.b], i * 3);
   });
   const m = new THREE.ShaderMaterial({
-    uniforms: { uTime: U.uTime, uMorph: U.uMorph, uPointScale: U.uPointScale, uAudio: U.uAudio, uSnowCap: U.uSnowCap },
+    uniforms: { uTime: U.uTime, uMorph: U.uMorph, uPointScale: U.uPointScale, uAudio: U.uAudio, uSnowCap: U.uSnowCap, ...SHAPE_U() },
     vertexShader: `${POINT_HEAD}
       uniform float uSnowCap;
       varying vec3 vCol;
@@ -1868,7 +2011,7 @@ function buildFoliage(n) {
 // ---------------- 实例化挂饰：形变在顶点着色器里做 ----------------
 function patchMorph(material) {
   material.onBeforeCompile = shader => {
-    shader.uniforms.uTime = U.uTime; shader.uniforms.uMorph = U.uMorph;
+    shader.uniforms.uTime = U.uTime; shader.uniforms.uMorph = U.uMorph; Object.assign(shader.uniforms, SHAPE_U());
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${MORPH_GLSL}\nattribute vec3 aTree; attribute vec3 aScatter; attribute vec4 aSeed;`)
       .replace('#include <beginnormal_vertex>', `
@@ -1931,7 +2074,7 @@ const GLOW_FRAG = `varying vec3 vCol; varying float vI;
 function glowMaterial(vertexBody) {
   return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uTime: U.uTime, uMorph: U.uMorph, uPointScale: U.uPointScale, uAudio: U.uAudio },
+    uniforms: { uTime: U.uTime, uMorph: U.uMorph, uPointScale: U.uPointScale, uAudio: U.uAudio, ...SHAPE_U() },
     vertexShader: `${POINT_HEAD}\nvarying vec3 vCol; varying float vI;\nvoid main(){${vertexBody}}`,
     fragmentShader: GLOW_FRAG
   });
@@ -1996,7 +2139,7 @@ function buildGlints(n) {
   });
   const m = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uTime: U.uTime, uMorph: U.uMorph, uPointScale: U.uPointScale, uAudio: U.uAudio },
+    uniforms: { uTime: U.uTime, uMorph: U.uMorph, uPointScale: U.uPointScale, uAudio: U.uAudio, ...SHAPE_U() },
     vertexShader: `${POINT_HEAD}\nvarying vec3 vCol; varying float vI; varying float vRot;
       void main(){
         float p = morphP(aSeed.y);
@@ -2146,6 +2289,7 @@ function buildPresents() {
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     pedestal.add(g);
   }
+  mergeStatic(pedestal);
 }
 
 // ---------------- 相框：数量随照片墙自动增减（8–24 个），照片更多时定时轮换 ----------------
@@ -2728,6 +2872,58 @@ function buildPost() {
   composer.addPass(finalPass);
 }
 
+// PMREM 的模糊着色器循环很长，D3D 下同步编译要上百毫秒到一秒多：先把它建出来，在后台并行编译好再用
+async function prewarmPMREM(gen, size) {
+  if (!renderer.compileAsync) return;
+  const prev = renderer.getRenderTarget();
+  try {
+    gen._setSize(size); gen._allocateTargets().dispose(); gen.compileCubemapShader();
+    const tmp = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), quad = new THREE.PlaneGeometry(2, 2);
+    for (const m of [gen._blurMaterial, gen._cubemapMaterial]) if (m) { const q = new THREE.Mesh(quad, m); q.frustumCulled = false; tmp.add(q); }
+    renderer.setRenderTarget(gen._pingPongRenderTarget);
+    await renderer.compileAsync(tmp, cam);
+    quad.dispose();
+  } catch (e) {} finally { renderer.setRenderTarget(prev); }
+}
+// ---------------- 预热：所有着色器在后台线程并行编译，第一次用到时不再卡主线程 ----------------
+// 关键是编译时的渲染目标要和真正渲染时一致：场景是画进后期的离屏缓冲（线性色彩、不做色调映射），
+// 对着屏幕编译出来的是另一个版本，等于白编译——第一帧照样同步重编一遍，开屏动画就卡好几秒。
+async function warmUp() {
+  if (!renderer.compileAsync) return;
+  const prev = renderer.getRenderTarget();
+  const wait = p => p.catch(() => {});
+  try {
+    renderer.setRenderTarget(composer.readBuffer);
+    await wait(renderer.compileAsync(scene, camera));
+    // 环境反射画的时候树是藏起来的（连同树顶星的点光源），灯光数不同就是另一套着色器，也要预先编译
+    if (cubeCam) {
+      const hide = [mainGroup, pedestal, snowGround, ...noReflect], was = hide.map(o => o.visible);
+      hide.forEach(o => { o.visible = false; });
+      renderer.setRenderTarget(cubeRT, 0);
+      await wait(renderer.compileAsync(scene, cubeCam.children[0]));
+      hide.forEach((o, i) => { o.visible = was[i]; });
+      renderer.setRenderTarget(composer.readBuffer);
+    }
+    // 后期各步、阴影深度材质：挂到一个临时场景里一起编译（离屏和上屏两个版本都要）
+    const mats = new Set();
+    const collect = v => { if (v && v.isMaterial) mats.add(v); else if (Array.isArray(v)) v.forEach(collect); };
+    for (const p of composer.passes) { for (const k in p) collect(p[k]); if (p.fsQuad) collect(p.fsQuad.material); }
+    scene.traverse(o => { collect(o.customDepthMaterial); collect(o.customDistanceMaterial); });
+    // 实时环境反射的 PMREM 模糊着色器（循环很长，D3D 下同步编译要一秒多）：先把它建出来一起并行编译
+    if (envGen) await prewarmPMREM(envGen, cubeRT.width);
+    const tmp = new THREE.Scene(), quad = new THREE.PlaneGeometry(2, 2), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    mats.forEach(m => { const q = new THREE.Mesh(quad, m); q.frustumCulled = false; tmp.add(q); });
+    await wait(renderer.compileAsync(tmp, cam));
+    renderer.setRenderTarget(null);
+    await wait(renderer.compileAsync(tmp, cam));
+    quad.dispose();
+  } finally { renderer.setRenderTarget(prev); }
+  // 大贴图提前传上显卡，一帧传一张，不挤在第一帧里
+  const texs = new Set();
+  scene.traverse(o => { const m = o.material; if (!m) return; for (const k of ['map', 'emissiveMap', 'roughnessMap', 'normalMap', 'metalnessMap', 'alphaMap']) if (m[k]) texs.add(m[k]); if (m.uniforms) for (const u of Object.values(m.uniforms)) if (u && u.value && u.value.isTexture) texs.add(u.value); });
+  for (const t of texs) { if (t.isRenderTargetTexture || !t.image) continue; renderer.initTexture(t); await new Promise(r => setTimeout(r, 0)); }
+}
+
 // ---------------- 画质与尺寸 ----------------
 function applyQuality() {
   const L = LEVELS[quality];
@@ -2807,9 +3003,20 @@ function setMode(m, { photo = -1, silent = false } = {}) {
   mode = m;
   const btns = [...document.querySelectorAll('#seg button')];
   btns.forEach((b, i) => { const on = b.dataset.mode === m; b.setAttribute('aria-checked', on); if (on) $('#seg').style.setProperty('--i', i); });
-  if (!silent && changed) toast('✦ ' + MODE_TEXT[m]);
+  if (!silent && changed) toast('✦ ' + (m === 'SCATTER' && shape ? '散作' + SHAPES[shape] : MODE_TEXT[m]));
 }
 window.setMode = m => setMode(m);
+// 散开的形状：从当前（可能还在过渡中的）样子接着流向新形状
+function setShape(k, { silent = false } = {}) {
+  k = ((k % SHAPES.length) + SHAPES.length) % SHAPES.length;
+  if (k === shape) return;
+  if (U.uShapeMix.value >= 0.5) U.uShapeA.value = U.uShapeB.value;
+  U.uShapeB.value = shape = k; U.uShapeMix.value = 0;
+  if (!silent) toast('✦ 散作' + SHAPES[k]);
+}
+// 已经散开时再按一次「散开」= 换下一个形状
+function scatterOrNext() { if (mode === 'SCATTER' && morph > 0.5) setShape(shape + 1); else setMode('SCATTER'); }
+window.setShape = k => setShape(k);
 
 // ---------------- 主循环 ----------------
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), camDir = new THREE.Vector3();
@@ -2817,15 +3024,22 @@ const scatterQ = new THREE.Quaternion();
 let last = performance.now(), fpsAcc = 0, fpsFrames = 0, slowWindows = 0;
 // 高刷屏（你的是 240Hz）上不追 240 帧：按屏幕刷新间隔整数倍跳帧，稳定出 60 帧，节奏均匀不抖
 let TARGET_MS = 1000 / Math.max(30, +(qs.get('hz') || 60));
-let rafLast = 0, rafInterval = 16.7, rafSkip = 0;
+// 按时间而不是按回调次数跳帧：显卡忙的时候 rAF 回调会挤在一起或者晚到，数回调次数会让帧间隔一会儿 3ms、一会儿 30ms。
+// 刷新间隔取最近 48 次回调间隔里偏小的那一档（不被偶尔的慢帧带偏）。
+let rafLast = 0, rafInterval = 16.7, nextAt = 0;
+const rafGaps = new Float32Array(48); let rafGapI = 0;
 function loop(now) {
   requestAnimationFrame(loop);
-  if (document.hidden) { last = now; rafLast = now; return; }
+  if (document.hidden) { last = now; rafLast = now; nextAt = 0; return; }
   const gap = now - rafLast; rafLast = now;
-  if (gap > 2 && gap < 40) rafInterval += (gap - rafInterval) * 0.05;
-  const step = Math.max(1, Math.round(TARGET_MS / rafInterval));
-  if (++rafSkip < step) return;
-  rafSkip = 0;
+  if (gap > 1.5 && gap < 50) {
+    rafGaps[rafGapI++ % 48] = gap;
+    if (rafGapI % 12 === 0 && rafGapI >= 48) rafInterval = [...rafGaps].sort((a, b) => a - b)[12];
+  }
+  // 目标间隔按刷新间隔取整，保证每帧占同样多个刷新周期
+  const frameMs = Math.max(1, Math.round(TARGET_MS / rafInterval)) * rafInterval;
+  if (now < nextAt - rafInterval * 0.5) return;
+  nextAt = now - nextAt > frameMs * 2 ? now + frameMs : nextAt + frameMs;
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   time += dt; U.uTime.value = time;
 
@@ -2834,6 +3048,7 @@ function loop(now) {
   const speed = reducedMotion ? 1.2 : 0.42;
   morph += Math.sign(target - morph) * Math.min(Math.abs(target - morph), dt * speed);
   U.uMorph.value = morph;
+  if (U.uShapeMix.value < 1) U.uShapeMix.value = Math.min(1, U.uShapeMix.value + dt * (reducedMotion ? 2 : 0.55));
   const mE = morph * morph * (3 - 2 * morph);
 
   // 旋转：自转 + 拖动惯性 + 手势偏移
@@ -2967,12 +3182,12 @@ function setupInput() {
 // 积雪：点击清扫
 $('#row-snow').addEventListener('click', () => { if (!sweeping) { sweeping = true; toast('正在清扫积雪，之后会重新慢慢积起来', 2400); } });
 // 分段按钮
-document.querySelectorAll('#seg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+document.querySelectorAll('#seg button').forEach(b => b.addEventListener('click', () => (b.dataset.mode === 'SCATTER' ? scatterOrNext() : setMode(b.dataset.mode))));
 // 键盘
 addEventListener('keydown', e => {
   if (document.documentElement.hasAttribute('data-intro') || e.target.closest('input,textarea')) return;
   if (e.code === 'Space') { e.preventDefault(); setMode('TREE'); }
-  else if (e.code === 'KeyZ') setMode('SCATTER');
+  else if (e.code === 'KeyZ') scatterOrNext();
   else if (e.code === 'KeyX') setMode('HOLDING');
   else if (e.code === 'KeyH') toggleUI();
   else if (e.code === 'KeyP') openGallery();
@@ -3171,10 +3386,12 @@ function startTitles(kind) {
   titleSeq = { kind, t0: performance.now(), dur: SEQ[kind] };
   titles.classList.add('on');
 }
+// 只在真的画过字幕之后才清空：空闲时每帧碰一下 2D 画布，浏览器就会让主线程等显卡把整帧画完（GPU 背压），帧率被拖成锯齿
+let titlesDirty = false;
 function drawTitles(now) {
   const W = titles.width, H = titles.height, x = tctx;
-  x.clearRect(0, 0, W, H);
-  if (!titleSeq) return false;
+  if (!titleSeq) { if (titlesDirty) { x.clearRect(0, 0, W, H); titlesDirty = false; } return false; }
+  x.clearRect(0, 0, W, H); titlesDirty = true;
   const t = (now - titleSeq.t0) / 1000, S = H * 0.2;
   if (titleSeq.kind === 'intro') {
     // 0–3.2s 夜幕上标志成形、NOËL 带着星光浮现；3.2–4.6s 夜幕和标志一起退去，露出场景
@@ -3536,7 +3753,11 @@ function setGesture(g) {
   document.querySelectorAll('.legend-row').forEach(r => r.classList.toggle('on', r.dataset.g === g));
   if (g === 'NONE') { if (camOn && landmarker) setHint('把手掌对着镜头', 'ok'); return; }
   if (g === 'OPEN') { setMode('TREE', { silent: true }); setHint('张开 · 聚合成树，左右移动可转动', 'live'); }
-  if (g === 'FIST') { setMode('SCATTER', { silent: true }); setHint('握拳 · 散作星河', 'live'); }
+  if (g === 'FIST') {
+    // 已经散开时松开再握拳：换下一个形状
+    if (mode === 'SCATTER' && morph > 0.5) setShape(shape + 1, { silent: true }); else setMode('SCATTER', { silent: true });
+    setHint('握拳 · 散作' + SHAPES[shape] + '（再握换形状）', 'live');
+  }
   if (g === 'PINCH') { if (mode !== 'HOLDING') setMode('HOLDING', { silent: true }); setHint('捏合 · 取出一张照片', 'live'); }
 }
 // 开屏结束、空闲时预取手势库，点开摄像头时更快
