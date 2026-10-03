@@ -182,13 +182,7 @@ body.g-open .side{opacity:0;pointer-events:none}
 .g-sub{margin-top:7px;font-size:11.5px;line-height:1.5;color:var(--txt-3)}
 .g-close{width:36px;height:36px;flex:none}
 .g-close svg{width:16px;height:16px}
-.g-upload{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;min-height:52px;border-radius:var(--r-md);cursor:pointer;font-size:14px;letter-spacing:.06em;color:#23180a;background:linear-gradient(180deg,#f9e7ad,#d7a948);box-shadow:inset 0 1px 0 rgba(255,255,255,.75),0 8px 24px -8px rgba(233,196,106,.7);transition:transform .22s var(--ease)}
-.g-upload:hover{transform:translateY(-1px)}
-.g-upload:active{transform:scale(.985)}
-.g-upload small{font-size:11px;opacity:.7;letter-spacing:0}
-.g-upload svg{width:18px;height:18px}
-.g-upload input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
-.g-grid{flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-content:start;padding-right:2px;scrollbar-width:thin;scrollbar-color:rgba(233,196,106,.3) transparent}
+.g-grid{flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:max-content;gap:8px;align-content:start;padding-right:2px;scrollbar-width:thin;scrollbar-color:rgba(233,196,106,.3) transparent}
 .g-grid:empty{display:none}
 .g-item{position:relative;margin:0;aspect-ratio:3/4;border-radius:12px;overflow:hidden;background:rgba(0,0,0,.3);border:1px solid var(--stroke-soft)}
 .g-item img{width:100%;height:100%;object-fit:cover;display:block}
@@ -214,6 +208,59 @@ body.dropping .drop{opacity:1}
   .gallery{left:12px;right:12px;top:auto;bottom:calc(env(safe-area-inset-bottom) + 12px);height:74vh;width:auto;transform:translateY(24px);padding:14px}
   .g-foot span{display:none}
 }
+
+/* ---------- 照片墙的文件夹：最新的五张插在里面只露出顶边，鼠标进来就带回弹地扇形展开 ----------
+   （Pixel Reconstruction「走过的地方」那只文件夹的同一套做法，配色换成丝绒酒红 + 香槟金）
+   每张卡的展开位置只由序号 k（-2…2）算出，写进 CSS 变量，动画全部交给 CSS transition。
+   卡片分两层：外层 .f-card 是感应区，只随文件夹展开到扇形位置；里层 .f-face 才是卡面，悬停时在感应区里抬起，
+   感应区不跟着抬，鼠标就不会从卡片下面“滑出去”再滑回来来回抖。开合由脚本判断（离开整个舞台 180ms 后才收起）。 */
+.f-stage{position:relative;flex:none;height:262px;display:grid;place-items:end center;padding-bottom:4px}
+.f-puff{position:absolute;left:50%;top:27%;transform:translate(-50%,-50%) rotate(-7deg);font:italic 600 118px/1 var(--font-serif);letter-spacing:-.01em;color:#f3d791;white-space:nowrap;pointer-events:none;user-select:none;
+  text-shadow:0 1px 0 #e8c672,0 2px 0 #dcb661,0 3px 0 #d0a854,0 4px 0 #c49a48,0 5px 0 #b78c3d,0 6px 0 #a87e33,0 14px 22px rgba(0,0,0,.45),0 0 40px rgba(233,196,106,.25),0 -1px 1px rgba(255,250,230,.9);
+  -webkit-mask-image:linear-gradient(104deg,#000 42%,transparent 58%);mask-image:linear-gradient(104deg,#000 42%,transparent 58%);-webkit-mask-size:320% 100%;mask-size:320% 100%;-webkit-mask-position:100% 0;mask-position:100% 0;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;opacity:.9}
+/* 充气的金箔气球字：第一次打开照片墙时，一道向右倾斜、带柔边的遮罩从左扫到右，像笔尖顺着写过去 */
+.f-puff[data-written]{animation:write 2.8s cubic-bezier(.42,0,.38,1) .15s forwards}
+@keyframes write{from{-webkit-mask-position:100% 0;mask-position:100% 0}to{-webkit-mask-position:0 0;mask-position:0 0}}
+.folder{position:relative;width:272px;height:150px}
+.f-back{position:absolute;inset:0;border-radius:20px;background:linear-gradient(170deg,#7a1a2c,#561020 55%,#3c0915);box-shadow:0 22px 40px -22px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,214,190,.35)}
+.f-back::before{content:"";position:absolute;left:16px;top:-12px;width:96px;height:30px;border-radius:12px 12px 0 0;background:#80202f}
+.f-card{position:absolute;left:calc(50% - 42px);bottom:26px;width:84px;height:110px;padding:0;border:0;background:none;cursor:pointer;transform-origin:50% 100%;
+  transform:translate3d(var(--rest-x),0,0) rotate(var(--rest-r));transition:transform .95s cubic-bezier(.34,1.45,.64,1) var(--delay)}
+.f-face{position:absolute;inset:0;border:3px solid #fbf3df;border-radius:10px;background:#fbf3df;overflow:hidden;box-shadow:0 8px 18px -10px rgba(0,0,0,.8);transform-origin:50% 100%;transition:transform .6s cubic-bezier(.34,1.45,.64,1),box-shadow .45s,border-color .45s}
+.f-face img{display:block;width:100%;height:100%;object-fit:cover;border-radius:7px}
+.f-tag{position:absolute;top:-10px;left:50%;transform:translateX(-50%) rotate(-4deg);padding:2px 8px;border-radius:99px;background:#fbf3df;color:#7a1a2c;font:600 9px/1.4 var(--font-display);letter-spacing:.12em;white-space:nowrap;box-shadow:0 4px 10px -4px rgba(0,0,0,.6)}
+.f-stage[data-open] .f-card{transform:translate3d(var(--open-x),var(--open-y),0) rotate(var(--open-r)) scale(1.1)}
+.f-card:hover,.f-card:focus-visible{z-index:20!important}
+.f-card:hover .f-face,.f-card:focus-visible .f-face{transform:translate3d(0,-26px,0) scale(1.08);border-color:#fff;box-shadow:0 22px 34px -14px rgba(0,0,0,.85)}
+/* 前袋：磨砂玻璃，卡片下半截在后面若隐若现；整块就是上传按钮 */
+.f-pocket{position:absolute;left:0;right:0;bottom:0;height:106px;z-index:30;border-radius:20px;cursor:pointer;overflow:hidden;
+  background:linear-gradient(165deg,rgba(255,226,200,.26),rgba(150,30,48,.42) 58%,rgba(90,14,28,.6));-webkit-backdrop-filter:blur(10px) saturate(1.3);backdrop-filter:blur(10px) saturate(1.3);
+  box-shadow:inset 0 1.5px 0 rgba(255,236,200,.55),inset 0 -10px 24px rgba(40,4,12,.45),0 16px 28px -18px rgba(0,0,0,.8);transition:transform .22s var(--ease)}
+.f-pocket:active{transform:scale(.985)}
+.f-pocket input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.f-ball{position:absolute;left:22px;top:18px;width:40px;height:40px;border-radius:50%;background:radial-gradient(ellipse 78% 78% at 36% 30%,#fff7da 0%,#f3d27c 28%,#b98a2e 70%,#5e3d0d 100%);box-shadow:0 6px 12px -5px rgba(0,0,0,.7);pointer-events:none}
+.f-ball::before{content:"";position:absolute;left:50%;top:-6px;width:12px;height:8px;margin-left:-6px;border-radius:3px 3px 1px 1px;background:linear-gradient(180deg,#f7e3a1,#b98a2e)}
+.f-sticker{position:absolute;right:52px;top:20px;padding:5px 8px;border-radius:8px;background:#fbf3df;color:#7a1a2c;font:700 11px/1 var(--font-display);letter-spacing:.08em;transform:rotate(9deg);box-shadow:0 6px 12px -6px rgba(0,0,0,.6);pointer-events:none}
+.f-label{position:absolute;left:20px;bottom:15px;display:flex;align-items:baseline;gap:8px;color:#fff6e4;font-size:16px;font-weight:600;letter-spacing:.04em;text-shadow:0 1px 8px rgba(40,4,12,.6);pointer-events:none}
+.f-label small{font-size:10.5px;font-weight:500;opacity:.8}
+.f-arrow{position:absolute;right:14px;bottom:13px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(251,243,223,.9);color:#7a1a2c;font-size:14px;pointer-events:none;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.f-stage[data-open] .f-arrow{transform:translateY(-3px)}
+/* 矮屏：文件夹收小一点，给下面的照片网格留地方 */
+@media(max-height:820px) and (min-width:761px){.f-stage{height:206px}.folder{transform:scale(.84);transform-origin:50% 100%}.f-puff{font-size:96px;top:30%}}
+@media(max-width:760px){.f-stage{height:216px}.folder{transform:scale(.86);transform-origin:50% 100%}.f-puff{font-size:92px}}
+@media(prefers-reduced-motion:reduce){.f-card,.f-face,.f-arrow{transition:none}.f-puff,.f-puff[data-written]{-webkit-mask-image:none;mask-image:none;animation:none}}
+
+/* ---------- 标题「Christmas」第一次出现时手写显现（与照片墙的气球字同一道遮罩） ---------- */
+.h-xmas{-webkit-mask-image:linear-gradient(104deg,#000 42%,transparent 58%);mask-image:linear-gradient(104deg,#000 42%,transparent 58%);-webkit-mask-size:320% 100%;mask-size:320% 100%;-webkit-mask-position:100% 0;mask-position:100% 0;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+.h-xmas[data-written]{animation:write 3.2s cubic-bezier(.42,0,.38,1) forwards}
+@media(prefers-reduced-motion:reduce){.h-xmas,.h-xmas[data-written]{-webkit-mask-image:none;mask-image:none;animation:none}}
+
+/* ---------- 播放音乐：图标换成一张小光盘，播放时转起来，彩虹反光扫过盘面 ---------- */
+.mini-disc{position:relative;width:18px;height:18px;flex:none;border-radius:50%;background:conic-gradient(from 20deg,#c9cfd6 0 8%,#fff 12%,#a0dcff 15%,#c9cfd6 20% 50%,#ffe6be 58%,#fff 61%,#c9cfd6 66%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.6),0 2px 6px rgba(0,0,0,.4);animation:spin 2.4s linear infinite;animation-play-state:paused}
+.mini-disc::after{content:"";position:absolute;inset:34%;border-radius:50%;background:radial-gradient(circle closest-side,var(--bg) 0 40%,#9aa3ad 42%,#f7f9fb 60%,rgba(240,244,248,.5) 62%)}
+[aria-checked="true"] .mini-disc{animation-play-state:running}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.mini-disc{animation:none}}
 
 /* ============================================================
    开屏：四片挂饰从屏幕四角飞来落定 → 树形轮廓从树尖向两侧描下 →
@@ -377,7 +424,7 @@ html[data-intro] #intro{display:block}
         <input type="file" id="music-input" accept="audio/*">
       </label>
       <button class="row" id="row-music" role="switch" aria-checked="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>
+        <span class="mini-disc" aria-hidden="true"></span>
         播放音乐<span class="switch"></span>
       </button>
       <button class="row" id="row-snow" title="积雪会慢慢变厚，点击清扫">
@@ -398,13 +445,22 @@ html[data-intro] #intro{display:block}
     <div><div class="g-title">照片墙</div><div class="g-sub" id="g-sub">还没有照片 · 会保存在本机浏览器里</div></div>
     <button class="icon-btn glass g-close" id="g-close" title="关闭 (Esc)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg><span class="sr">关闭</span></button>
   </header>
-  <label class="g-upload">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
-    上传照片<small>可一次选多张</small>
-    <input type="file" id="photo-input" multiple accept="image/*">
-  </label>
+  <div class="f-stage" id="f-stage">
+    <span class="f-puff" id="f-puff" aria-hidden="true">Noël</span>
+    <div class="folder" id="folder">
+      <span class="f-back" aria-hidden="true"></span>
+      <span id="f-cards"></span>
+      <label class="f-pocket" title="上传照片，可一次选多张">
+        <span class="f-ball" aria-hidden="true"></span>
+        <span class="f-sticker" aria-hidden="true">12·24</span>
+        <span class="f-label">上传照片<small>可一次选多张</small></span>
+        <span class="f-arrow" aria-hidden="true">↑</span>
+        <input type="file" id="photo-input" multiple accept="image/*" aria-label="上传照片">
+      </label>
+    </div>
+  </div>
   <div class="g-grid" id="g-grid"></div>
-  <div class="g-empty" id="g-empty">点上面的按钮，或把照片直接拖进窗口<br>树上的相框会换成你的照片</div>
+  <div class="g-empty" id="g-empty">点上面的文件夹，或把照片直接拖进窗口<br>树上的相框会换成你的照片</div>
   <footer class="g-foot"><span>悬停照片可查看、替换、删除</span><button class="g-clear" id="g-clear" hidden>全部清空</button></footer>
 </section>
 <div class="drop" id="drop"><div class="drop-inner glass">松手，把照片挂到树上</div></div>
@@ -491,7 +547,12 @@ html[data-intro] #intro{display:block}
   var openGate; window.__sceneGate = new Promise(function (r) { openGate = r; });
   var landed = false;
   window.__introLanded = function () { return landed; };
-  function markLanded() { if (landed) return; landed = true; openGate(); window.dispatchEvent(new Event("intro:land")); }
+  function markLanded() {
+    if (landed) return; landed = true; openGate(); window.dispatchEvent(new Event("intro:land"));
+    // 标题里的「Christmas」在开屏退场时顺着书写方向写出来
+    var xmas = document.querySelector(".h-xmas");
+    if (xmas) setTimeout(function () { xmas.setAttribute("data-written", ""); }, html.getAttribute("data-intro") ? 420 : 200);
+  }
 
   var root = document.getElementById("intro");
   if (html.getAttribute("data-intro") !== "play" || !root) { markLanded(); root && root.remove(); return; }
@@ -2339,7 +2400,7 @@ function openGallery(on = !gal.classList.contains('open')) {
   gal.classList.toggle('open', on); gal.setAttribute('aria-hidden', String(!on));
   document.body.classList.toggle('g-open', on);
   $('#row-photo').setAttribute('aria-expanded', String(on));
-  if (on) renderGallery();
+  if (on) { renderGallery(); $('#f-puff').setAttribute('data-written', ''); }
 }
 function renderGallery() {
   const L = library.length;
@@ -2348,6 +2409,7 @@ function renderGallery() {
   $('#g-empty').hidden = L > 0;
   $('#g-clear').hidden = L === 0;
   if (!gal.classList.contains('open')) return;
+  renderFolder();
   const keep = new Map([...grid.children].map(el => [el.dataset.id, el]));
   const frag = document.createDocumentFragment();
   library.forEach((rec, i) => {
@@ -2394,6 +2456,49 @@ $('#g-close').addEventListener('click', () => openGallery(false));
   addEventListener('drop', e => { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; document.body.classList.remove('dropping'); addPhotos([...e.dataTransfer.files]); });
 }
 window.handlePhotos = input => { if (input && input.files) addPhotos([...input.files]); };
+
+// ---------------- 照片墙的文件夹：最新的五张插在里面，鼠标进来就扇形展开 ----------------
+// 开合由脚本判断，不靠 CSS :hover：进入文件夹（或键盘聚焦）时展开，离开整个舞台 180ms 后才收起。
+// 舞台是固定不动的大区域，盖住整个扇形，卡片自己怎么动都不会让开合来回翻转。
+const fStage = $('#f-stage'), fCards = $('#f-cards');
+let fCloseTimer = 0, fSig = '';
+const fShow = () => { clearTimeout(fCloseTimer); fStage.setAttribute('data-open', ''); };
+const fHide = () => { clearTimeout(fCloseTimer); fCloseTimer = setTimeout(() => fStage.removeAttribute('data-open'), 180); };
+$('#folder').addEventListener('pointerenter', e => { if (e.pointerType !== 'touch') fShow(); });
+fStage.addEventListener('pointerleave', fHide);
+fStage.addEventListener('focusin', fShow);
+fStage.addEventListener('focusout', e => { if (!fStage.contains(e.relatedTarget)) fHide(); });
+const cardThumbs = new WeakMap();
+function cardThumb(ph) {
+  const c = ph.cardTex.image;
+  if (!cardThumbs.has(c)) cardThumbs.set(c, c.toDataURL('image/jpeg', 0.85));
+  return cardThumbs.get(c);
+}
+function renderFolder() {
+  // 最新的一张放在正中、压在最上面，往两边依次是更早的
+  const recs = library.slice(-5).reverse();
+  const items = recs.length
+    ? recs.map(r => ({ key: r.id, src: recUrl(r), label: '看看 ' + (r.name || '这张照片'), open: () => viewPhoto(r.id) }))
+    : photos.slice(0, 5).map((ph, i) => ({ key: 'card' + i, src: cardThumb(ph), label: '看看这张贺卡', open: () => { setMode('HOLDING', { photo: i }); if (isSmall()) openGallery(false); } }));
+  const sig = items.map(it => it.key + it.src.length).join('|');
+  if (sig === fSig) return;
+  fSig = sig;
+  const n = items.length, mid = (n - 1) / 2;
+  const slots = [...Array(n).keys()].sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid) || a - b);
+  const frag = document.createDocumentFragment();
+  items.forEach((it, j) => {
+    const i = slots[j], k = i - mid, edge = Math.abs(k);
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'f-card'; b.setAttribute('aria-label', it.label);
+    // 展开：越靠外越低、越斜
+    b.style.cssText = `--rest-x:${k * 8}px;--rest-r:${k * 3}deg;--open-x:${k * 56}px;--open-y:${-94 + edge * edge * 9}px;--open-r:${k * 11}deg;--delay:${edge * 70}ms;z-index:${10 - Math.round(edge)}`;
+    b.innerHTML = `<span class="f-face"><img alt="" decoding="async" draggable="false"></span>${j === 0 ? `<span class="f-tag">${recs.length ? 'NEW' : 'NOËL'}</span>` : ''}`;
+    b.querySelector('img').src = it.src;
+    b.addEventListener('click', it.open);
+    frag.appendChild(b);
+  });
+  fCards.replaceChildren(frag);
+}
 
 // ---------------- 地板：真实平面反射 + 雪面闪粉 + 树下暖光 ----------------
 function buildFloor() {

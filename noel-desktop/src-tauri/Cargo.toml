@@ -1,6 +1,6 @@
 [package]
 name = "noel-tree"
-version = "1.0.0"
+version = "1.1.0"
 description = "Noël · 圣诞树 Windows 客户端"
 edition = "2021"
 
